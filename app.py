@@ -23,19 +23,42 @@ st.set_page_config(page_title="Coffee Bean Classifier", page_icon="☕", layout=
 # ----------------------------------------------------------------------------
 # Model + inference helpers
 # ----------------------------------------------------------------------------
+def build_model():
+    """Rebuild the exact architecture from the training notebook."""
+    from tensorflow.keras import Sequential
+    from tensorflow.keras.applications import ResNet50V2
+    from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+
+    base_model = ResNet50V2(include_top=False, weights=None,
+                            input_shape=(IMG_SIZE[0], IMG_SIZE[1], 3))
+    return Sequential([
+        base_model,
+        GlobalAveragePooling2D(),
+        Dense(256, activation="relu"),
+        Dropout(0.2),
+        Dense(len(CLASS_NAMES), activation="softmax"),
+    ])
+
+
 @st.cache_resource(show_spinner="Loading model...")
 def load_model():
-    # Prefer legacy Keras 2 (tf_keras): it matches how the .h5 was trained/saved.
+    errors = []
+
+    # 1) Rebuild architecture + load only the trained weights (most compatible)
     try:
-        import tf_keras
-        return tf_keras.models.load_model(MODEL_PATH, compile=False)
-    except Exception as first_error:
-        try:
-            return tf.keras.models.load_model(MODEL_PATH, compile=False)
-        except Exception as second_error:
-            raise RuntimeError(
-                f"tf_keras error: {first_error}\n\ntf.keras error: {second_error}"
-            )
+        model = build_model()
+        model.load_weights(MODEL_PATH)
+        return model
+    except Exception as e:
+        errors.append(f"build + load_weights error: {e}")
+
+    # 2) Standard full-model load
+    try:
+        return tf.keras.models.load_model(MODEL_PATH, compile=False)
+    except Exception as e:
+        errors.append(f"load_model error: {e}")
+
+    raise RuntimeError("\n\n".join(errors))
 
 
 def preprocess(image: Image.Image) -> np.ndarray:
