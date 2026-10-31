@@ -25,12 +25,17 @@ st.set_page_config(page_title="Coffee Bean Classifier", page_icon="☕", layout=
 # ----------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading model...")
 def load_model():
+    # Prefer legacy Keras 2 (tf_keras): it matches how the .h5 was trained/saved.
     try:
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
-    except Exception:
-        # Fallback for older .h5 files that Keras 3 cannot read
         import tf_keras
         return tf_keras.models.load_model(MODEL_PATH, compile=False)
+    except Exception as first_error:
+        try:
+            return tf.keras.models.load_model(MODEL_PATH, compile=False)
+        except Exception as second_error:
+            raise RuntimeError(
+                f"tf_keras error: {first_error}\n\ntf.keras error: {second_error}"
+            )
 
 
 def preprocess(image: Image.Image) -> np.ndarray:
